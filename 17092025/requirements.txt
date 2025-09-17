@@ -1,0 +1,13 @@
+crewai
+crewai-tools
+python-dotenv
+flask
+gradio
+networkx
+matplotlib
+astunparse
+requests
+
+# LLM Provider Libraries
+langchain-openai
+langchain-mistralai

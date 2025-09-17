@@ -1,0 +1,404 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d4" for="edge" attr.name="type" attr.type="string" />
+  <key id="d3" for="node" attr.name="source_code" attr.type="string" />
+  <key id="d2" for="node" attr.name="file" attr.type="string" />
+  <key id="d1" for="node" attr.name="type" attr.type="string" />
+  <key id="d0" for="graph" attr.name="source_code" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="buggy_app.py">
+      <data key="d1">File</data>
+    </node>
+    <node id="user_login">
+      <data key="d1">Function</data>
+      <data key="d2">buggy_app.py</data>
+      <data key="d3">@app.route('/api/v1/users/login', methods=['POST'])
+def user_login():
+    username = request.json.get('username')
+    if ("' OR '1'='1" in username):
+        logging.error(f'SQL Injection attempt detected for username: {username}')
+        return (jsonify({'error': 'Unauthorized'}), 401)
+    return jsonify({'message': f'Welcome {username}'})</data>
+    </node>
+    <node id="product_search">
+      <data key="d1">Function</data>
+      <data key="d2">buggy_app.py</data>
+      <data key="d3">@app.route('/api/v2/products/search', methods=['GET'])
+def product_search():
+    query = request.args.get('q')
+    logging.info(f'Performing slow search for: {query}')
+    time.sleep(3)
+    return jsonify([{'id': 'item_123', 'name': 'Super Widget'}, {'id': 'item_456', 'name': 'Mega Gadget'}])</data>
+    </node>
+    <node id="create_order">
+      <data key="d1">Function</data>
+      <data key="d2">buggy_app.py</data>
+      <data key="d3">@app.route('/api/v1/orders/create', methods=['POST'])
+def create_order():
+    '\n    BUG: This function and `process_inventory_update` can cause a database deadlock.\n    This function locks ORDERS then INVENTORY.\n    The other function locks INVENTORY then ORDERS.\n    If called concurrently, they can deadlock.\n    '
+    item_id = request.json.get('item_id')
+    quantity = request.json.get('quantity')
+    order_id = f'ord_{int(time.time())}'
+    logging.info(f'Attempting to lock ORDERS for order {order_id}')
+    with DB_LOCK_ORDERS:
+        logging.info(f'ORDERS locked for {order_id}. Simulating work...')
+        time.sleep(0.1)
+        logging.info(f'Attempting to lock INVENTORY for order {order_id}')
+        with DB_LOCK_INVENTORY:
+            logging.info(f'INVENTORY locked for {order_id}')
+            if (INVENTORY.get(item_id, 0) &gt;= quantity):
+                INVENTORY[item_id] -= quantity
+                ORDERS[order_id] = {'item': item_id, 'quantity': quantity, 'status': 'created'}
+                logging.info(f'Order {order_id} created successfully.')
+                return (jsonify(ORDERS[order_id]), 201)
+            else:
+                return (jsonify({'error': 'Out of stock'}), 400)</data>
+    </node>
+    <node id="ORDERS">
+      <data key="d1">DatabaseTable</data>
+    </node>
+    <node id="INVENTORY">
+      <data key="d1">DatabaseTable</data>
+    </node>
+    <node id="process_inventory_update">
+      <data key="d1">Function</data>
+      <data key="d2">buggy_app.py</data>
+      <data key="d3">@app.route('/background/inventory/update', methods=['POST'])
+def process_inventory_update():
+    '\n    BUG: Companion function to `create_order` for causing a deadlock.\n    This function locks INVENTORY then ORDERS.\n    '
+    item_id = request.json.get('item_id')
+    logging.info(f'BG: Attempting to lock INVENTORY for stock update')
+    with DB_LOCK_INVENTORY:
+        logging.info('BG: INVENTORY locked. Simulating work...')
+        time.sleep(0.1)
+        logging.info('BG: Attempting to lock ORDERS for consistency check')
+        with DB_LOCK_ORDERS:
+            logging.info('BG: ORDERS locked. Both locks acquired.')
+            time.sleep(0.5)
+            logging.info('BG: Consistency check complete.')
+            return (jsonify({'message': 'Inventory check complete'}), 200)</data>
+    </node>
+    <node id="process_payment">
+      <data key="d1">Function</data>
+      <data key="d2">buggy_app.py</data>
+      <data key="d3">@app.route('/api/v3/payments/process', methods=['POST'])
+def process_payment():
+    order_id = request.json.get('order_id')
+    amount = request.json.get('amount')
+    logging.info(f'Processing v3 payment for {order_id} of amount {amount}')
+    return jsonify({'status': 'paid', 'transaction_id': f'txn_{int(time.time())}'})</data>
+    </node>
+    <node id="call_payment_service_from_order_service">
+      <data key="d1">Function</data>
+      <data key="d2">buggy_app.py</data>
+      <data key="d3">def call_payment_service_from_order_service(order_id):
+    '\n    BUG: This function simulates the order-service calling the payment-service\n    with an outdated API endpoint.\n    '
+    if (PAYMENT_API_VERSION != 'v3'):
+        logging.error(f'VERSION_COMPATIBILITY_ISSUE: Trying to call /api/{PAYMENT_API_VERSION}/process-payment which is deprecated.')
+        return False
+    return True</data>
+    </node>
+    <node id="send_notification">
+      <data key="d1">Function</data>
+      <data key="d2">buggy_app.py</data>
+      <data key="d3">@app.route('/api/v1/notifications/send', methods=['POST'])
+def send_notification():
+    if (not SMTP_HOST):
+        logging.error('ENVIRONMENT_VARIABLE_MISSING: SMTP_HOST is not set. Cannot send email.')
+        return (jsonify({'error': 'Notification service is misconfigured'}), 500)
+    email = request.json.get('email')
+    logging.info(f'Sending notification to {email} via {SMTP_HOST}')
+    return jsonify({'message': 'Notification sent.'})</data>
+    </node>
+    <node id="run_heavy_computation">
+      <data key="d1">Function</data>
+      <data key="d2">buggy_app.py</data>
+      <data key="d3">@app.route('/jobs/heavy-computation')
+def run_heavy_computation():
+    logging.info('Starting heavy computation job...')
+    time.sleep(10)
+    logging.info('Heavy computation finished.')
+    return 'Job complete'</data>
+    </node>
+    <node id="user-service">
+      <data key="d1">Service</data>
+    </node>
+    <node id="product-service">
+      <data key="d1">Service</data>
+    </node>
+    <node id="order-service">
+      <data key="d1">Service</data>
+    </node>
+    <node id="inventory-service">
+      <data key="d1">Service</data>
+    </node>
+    <node id="payment-service">
+      <data key="d1">Service</data>
+    </node>
+    <node id="notification-service">
+      <data key="d1">Service</data>
+    </node>
+    <node id="worker-service">
+      <data key="d1">Service</data>
+    </node>
+    <node id="sql_injection_attempt">
+      <data key="d1">ErrorType</data>
+    </node>
+    <node id="database_slow_queries">
+      <data key="d1">ErrorType</data>
+    </node>
+    <node id="database_deadlock">
+      <data key="d1">ErrorType</data>
+    </node>
+    <node id="version_compatibility_issue">
+      <data key="d1">ErrorType</data>
+    </node>
+    <node id="environment_variable_missing">
+      <data key="d1">ErrorType</data>
+    </node>
+    <node id="thread_pool_exhaustion">
+      <data key="d1">ErrorType</data>
+    </node>
+    <edge source="buggy_app.py" target="user_login">
+      <data key="d4">CONTAINS</data>
+    </edge>
+    <edge source="buggy_app.py" target="product_search">
+      <data key="d4">CONTAINS</data>
+    </edge>
+    <edge source="buggy_app.py" target="create_order">
+      <data key="d4">CONTAINS</data>
+    </edge>
+    <edge source="buggy_app.py" target="process_inventory_update">
+      <data key="d4">CONTAINS</data>
+    </edge>
+    <edge source="buggy_app.py" target="process_payment">
+      <data key="d4">CONTAINS</data>
+    </edge>
+    <edge source="buggy_app.py" target="call_payment_service_from_order_service">
+      <data key="d4">CONTAINS</data>
+    </edge>
+    <edge source="buggy_app.py" target="send_notification">
+      <data key="d4">CONTAINS</data>
+    </edge>
+    <edge source="buggy_app.py" target="run_heavy_computation">
+      <data key="d4">CONTAINS</data>
+    </edge>
+    <edge source="user_login" target="sql_injection_attempt">
+      <data key="d4">CAN_CAUSE</data>
+    </edge>
+    <edge source="product_search" target="database_slow_queries">
+      <data key="d4">CAN_CAUSE</data>
+    </edge>
+    <edge source="create_order" target="ORDERS">
+      <data key="d4">MODIFIES</data>
+    </edge>
+    <edge source="create_order" target="INVENTORY">
+      <data key="d4">MODIFIES</data>
+    </edge>
+    <edge source="create_order" target="database_deadlock">
+      <data key="d4">CAN_CAUSE</data>
+    </edge>
+    <edge source="process_inventory_update" target="INVENTORY">
+      <data key="d4">MODIFIES</data>
+    </edge>
+    <edge source="process_inventory_update" target="ORDERS">
+      <data key="d4">MODIFIES</data>
+    </edge>
+    <edge source="process_inventory_update" target="database_deadlock">
+      <data key="d4">CAN_CAUSE</data>
+    </edge>
+    <edge source="call_payment_service_from_order_service" target="version_compatibility_issue">
+      <data key="d4">CAN_CAUSE</data>
+    </edge>
+    <edge source="send_notification" target="environment_variable_missing">
+      <data key="d4">CAN_CAUSE</data>
+    </edge>
+    <edge source="run_heavy_computation" target="thread_pool_exhaustion">
+      <data key="d4">CAN_CAUSE</data>
+    </edge>
+    <edge source="user-service" target="user_login">
+      <data key="d4">IMPLEMENTS</data>
+    </edge>
+    <edge source="product-service" target="product_search">
+      <data key="d4">IMPLEMENTS</data>
+    </edge>
+    <edge source="order-service" target="create_order">
+      <data key="d4">IMPLEMENTS</data>
+    </edge>
+    <edge source="order-service" target="call_payment_service_from_order_service">
+      <data key="d4">IMPLEMENTS</data>
+    </edge>
+    <edge source="inventory-service" target="process_inventory_update">
+      <data key="d4">IMPLEMENTS</data>
+    </edge>
+    <edge source="payment-service" target="process_payment">
+      <data key="d4">IMPLEMENTS</data>
+    </edge>
+    <edge source="notification-service" target="send_notification">
+      <data key="d4">IMPLEMENTS</data>
+    </edge>
+    <edge source="worker-service" target="run_heavy_computation">
+      <data key="d4">IMPLEMENTS</data>
+    </edge>
+    <data key="d0">#!/usr/bin/env python3
+"""
+A Deliberately Buggy E-commerce Flask Application for SRE Postmortem Simulation.
+This application contains intentional bugs that correspond to the incidents
+generated by enhanced_ecommerce_runner.py.
+"""
+import os
+import time
+import threading
+import logging
+from flask import Flask, jsonify, request
+
+app = Flask(__name__)
+
+# --- In-memory "database" and state simulation ---
+INVENTORY = {'item_123': 50, 'item_456': 25}
+ORDERS = {}
+DB_LOCK_INVENTORY = threading.Lock()
+DB_LOCK_ORDERS = threading.Lock()
+
+# --- Configuration (or lack thereof) ---
+# BUG: Missing environment variables will cause `notification-service` to fail.
+SMTP_HOST = os.environ.get('SMTP_HOST')
+PAYMENT_API_VERSION = "v2" # Simulates an older version
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# ===============================================
+# USER SERVICE
+# ===============================================
+@app.route('/api/v1/users/login', methods=['POST'])
+def user_login():
+    # BUG: This endpoint is vulnerable to a simple SQL injection pattern.
+    # The 'enhanced_ecommerce_runner' simulates a WAF catching this, 
+    # but the vulnerable code is here.
+    username = request.json.get('username')
+    if "' OR '1'='1" in username:
+        logging.error(f"SQL Injection attempt detected for username: {username}")
+        return jsonify({"error": "Unauthorized"}), 401
+    return jsonify({"message": f"Welcome {username}"})
+
+# ===============================================
+# PRODUCT SERVICE
+# ===============================================
+@app.route('/api/v2/products/search', methods=['GET'])
+def product_search():
+    # BUG: This simulates a slow query by not using an index (in a real DB)
+    # and performing a time-consuming operation.
+    query = request.args.get('q')
+    logging.info(f"Performing slow search for: {query}")
+    time.sleep(3) # Simulates a complex, unoptimized query
+    return jsonify([
+        {'id': 'item_123', 'name': 'Super Widget'},
+        {'id': 'item_456', 'name': 'Mega Gadget'}
+    ])
+
+# ===============================================
+# ORDER &amp; INVENTORY SERVICES (Interacting)
+# ===============================================
+@app.route('/api/v1/orders/create', methods=['POST'])
+def create_order():
+    """
+    BUG: This function and `process_inventory_update` can cause a database deadlock.
+    This function locks ORDERS then INVENTORY.
+    The other function locks INVENTORY then ORDERS.
+    If called concurrently, they can deadlock.
+    """
+    item_id = request.json.get('item_id')
+    quantity = request.json.get('quantity')
+    order_id = f"ord_{int(time.time())}"
+
+    logging.info(f"Attempting to lock ORDERS for order {order_id}")
+    with DB_LOCK_ORDERS:
+        logging.info(f"ORDERS locked for {order_id}. Simulating work...")
+        time.sleep(0.1)
+        logging.info(f"Attempting to lock INVENTORY for order {order_id}")
+        with DB_LOCK_INVENTORY:
+            logging.info(f"INVENTORY locked for {order_id}")
+            if INVENTORY.get(item_id, 0) &gt;= quantity:
+                INVENTORY[item_id] -= quantity
+                ORDERS[order_id] = {'item': item_id, 'quantity': quantity, 'status': 'created'}
+                logging.info(f"Order {order_id} created successfully.")
+                return jsonify(ORDERS[order_id]), 201
+            else:
+                return jsonify({"error": "Out of stock"}), 400
+
+@app.route('/background/inventory/update', methods=['POST'])
+def process_inventory_update():
+    """
+    BUG: Companion function to `create_order` for causing a deadlock.
+    This function locks INVENTORY then ORDERS.
+    """
+    item_id = request.json.get('item_id')
+    logging.info(f"BG: Attempting to lock INVENTORY for stock update")
+    with DB_LOCK_INVENTORY:
+        logging.info("BG: INVENTORY locked. Simulating work...")
+        time.sleep(0.1)
+        logging.info("BG: Attempting to lock ORDERS for consistency check")
+        with DB_LOCK_ORDERS:
+            logging.info("BG: ORDERS locked. Both locks acquired.")
+            # Simulate checking all orders for the item_id
+            time.sleep(0.5)
+            logging.info("BG: Consistency check complete.")
+            return jsonify({"message": "Inventory check complete"}), 200
+
+# ===============================================
+# PAYMENT SERVICE
+# ===============================================
+@app.route('/api/v3/payments/process', methods=['POST'])
+def process_payment():
+    # BUG: This endpoint represents a newer version (v3). The order service
+    # will try to call an older, non-existent v2 endpoint, causing a
+    # version compatibility issue.
+    order_id = request.json.get('order_id')
+    amount = request.json.get('amount')
+    logging.info(f"Processing v3 payment for {order_id} of amount {amount}")
+    return jsonify({"status": "paid", "transaction_id": f"txn_{int(time.time())}"})
+
+def call_payment_service_from_order_service(order_id):
+    """
+    BUG: This function simulates the order-service calling the payment-service
+    with an outdated API endpoint.
+    """
+    if PAYMENT_API_VERSION != "v3":
+        logging.error(f"VERSION_COMPATIBILITY_ISSUE: Trying to call /api/{PAYMENT_API_VERSION}/process-payment which is deprecated.")
+        # In a real app, this would be a requests.post() call that would fail.
+        return False
+    return True
+
+# ===============================================
+# NOTIFICATION SERVICE
+# ===============================================
+@app.route('/api/v1/notifications/send', methods=['POST'])
+def send_notification():
+    # BUG: This function relies on an environment variable that is not set.
+    if not SMTP_HOST:
+        logging.error("ENVIRONMENT_VARIABLE_MISSING: SMTP_HOST is not set. Cannot send email.")
+        return jsonify({"error": "Notification service is misconfigured"}), 500
+    
+    email = request.json.get('email')
+    logging.info(f"Sending notification to {email} via {SMTP_HOST}")
+    return jsonify({"message": "Notification sent."})
+
+
+# ===============================================
+# WORKER SERVICE (for performance issues)
+# ===============================================
+@app.route('/jobs/heavy-computation')
+def run_heavy_computation():
+    # BUG: This simulates a long-running task that can tie up worker threads,
+    # leading to thread pool exhaustion under load.
+    logging.info("Starting heavy computation job...")
+    time.sleep(10) # Simulates a very long operation
+    logging.info("Heavy computation finished.")
+    return "Job complete"
+
+if __name__ == '__main__':
+    # Running with threaded=True to allow concurrent requests to trigger deadlocks
+    app.run(host='0.0.0.0', port=5000, threaded=True, debug=True)
+</data>
+  </graph>
+</graphml>
