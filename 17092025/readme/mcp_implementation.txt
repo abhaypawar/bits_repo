@@ -1,0 +1,37 @@
+Part 3: MCP Architecture with CrewAI & Code Intelligence Graph RAG
+
+Here’s how to integrate this into your proposed MCP architecture.
+
+Diagram of the Flow:
+Code snippet
+
+graph TD
+    A[Logs from enhanced_ecommerce_runner.py] --> B{MCP Host};
+    B -- "Incident: Deadlock Detected" --> C[1. Root Cause Analyser Agent];
+    C -- "Query for deadlock causes" --> D(Tool: Code Intelligence Graph RAG);
+    D -- "Returns `create_order` & `process_inventory_update` code" --> C;
+    C -- "Root Cause: Inconsistent Lock Order" --> B;
+    B -- "Passes Root Cause" --> E[2. Remediation Plan Agent];
+    E -- "Analyze buggy code" --> D;
+    D -- "Returns same functions" --> E;
+    E -- "Plan: 'Standardize lock order in both functions'" --> B;
+    B -- "Passes Cause & Plan" --> F[3. Report Writer Agent];
+    F --> G[✅ Final Postmortem Report];
+
+    style D fill:#f9f,stroke:#333,stroke-width:2px
+
+Workflow:
+
+    Incident Trigger: Your enhanced_ecommerce_runner.py generates logs indicating a database_deadlock.
+
+    Host Orchestration: The MCP Host ingests the logs and tasks the Root Cause Analyser Agent.
+
+    Intelligent Retrieval: The RCA Agent uses its CodeIntelligenceGraphRAG tool. It queries the graph for functions linked to deadlocks and the orders and inventory tables.
+
+    Precise Analysis: The tool returns the code for create_order and process_inventory_update. The agent analyzes this small, perfect context and identifies the inconsistent lock ordering.
+
+    Remediation: The identified root cause is passed to the Remediation Plan Agent. It re-analyzes the code and suggests a concrete fix: "Refactor process_inventory_update to lock ORDERS before INVENTORY."
+
+    Reporting: The Report Writer Agent receives the structured output from the previous two agents and compiles a comprehensive postmortem report, including the incident timeline, the precise root cause with code snippets, and the actionable remediation plan.
+
+This architecture provides the "novel" element you need for your Master's project by creating a far more intelligent and effective RAG system tailored for the complexities of code analysis.
